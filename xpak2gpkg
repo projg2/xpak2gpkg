@@ -52,10 +52,9 @@ esac
 
 basename=${filename%.xpak}
 mkdir "${basename}" || die "mkdir failed"
-mv "${data}" "${basename}/image.tar${comp_suffix}" || die "mv image failed"
 
 echo "Repacking metadata ..." >&2
-mkdir "${basename}/metadata" || die "mkdir (2) failed"
+mkdir "${basename}/metadata" || die "mkdir metadata failed"
 qxpak -d "${basename}/metadata" -x "${xpak}" || die "qxpak failed to unpack"
 rm "${xpak}" || die "rm xpak failed"
 envfile=${basename}/metadata/environment.bz2
@@ -65,6 +64,13 @@ fi
 tar -C "${basename}" -c -f "${basename}/metadata.tar" metadata || die "tar metadata failed"
 rm -r "${basename}/metadata" || die "rm metadata failed"
 "${comp[@]}" "${basename}/metadata.tar" || die "${comp[*]} metadata.tar failed"
+
+echo "Repacking image ..." >&2
+mkdir "${basename}"/image || die "mkdir image failed"
+tar -x -C "${basename}"/image -f "${data}" || die "unpack image failed"
+tar -c -C "${basename}" image | "${comp[@]}" > "${basename}/image.tar${comp_suffix}" \
+	|| die "tar | ${comp[@]} image failed"
+rm -r "${basename}"/image || die "rm image failed"
 
 echo "Signing tarballs ..." >&2
 gpg --detach-sign "${basename}/metadata.tar${comp_suffix}" || die "signing metadata failed"

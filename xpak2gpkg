@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+
+if [[ ${#} -lt 1 || ${#} -gt 2 ]]; then
+	echo "Usage: ${0} <source.xpak> [<dest.gpkg.tar>]" >&2
+	exit 1
+fi
+
+die() {
+	echo "${*}"
+	exit 1
+}
+
+input=${1}
+output=${2:-${input%.xpak}.gpkg.tar}
+
+type -P qtbz2 &>/dev/null || die "qtbz2 (from portage-utils) required"
+type -P qxpak &>/dev/null || die "qxpak (from portage-utils) required"
+
+tmpdir=$(mktemp -d)
+trap 'cd; rm -r "${tmpdir}"' EXIT
+
+echo "Splitting the binary package ..." >&2
+qtbz2 -d "${tmpdir}" -s "${input}" || die "qtbz2 splitting failed"
+
+cd "${tmpdir}" || die "cd to tmpdir failed"
+filename=${input##*/}
+data=${filename}.tar.bz2
+xpak=${filename}.xpak
+
+comp_mime=$(file -b --mime-type "${data}")
+case ${comp_mime} in
+	application/x-bzip2)
+		comp_suffix=.bz2
+		comp=(bzip2 -9)
+		;;
+	application/x-gzip)
+		comp_suffix=.gz
+		comp=(gzip -9)
+		;;
+	application/x-lzip)
+		comp_suffix=.lz
+		comp=(lzip -9)
+		;;
+	application/x-xz)
+		comp_suffix=.xz
+		comp=(xz -e9)
+	*)
+		die "Unknown compression format: ${comp_mime}"
+		;;
+esac
+
+basename=${filename%.xpak}
+mkdir "${basename}" || die "mkdir failed"
+mv "${data}" "${basename}/contents.tar${comp_suffix}" || die "mv contents failed"
+
+echo "Repacking metadata ..." >&2
+mkdir "${basename}/metadata" || die "mkdir (2) failed"
+qxpak -d "${basename}/metadata" -x "${xpak}" || die "qxpak failed to unpack"
+rm "${xpak}" || die "rm xpak failed"
+envfile=${basename}/metadata/environment.bz2
+if [[ -f ${envfile} ]]; then
+	bzip2 -d "${envfile}" || die "unpacking environment.bz2 failed"
+fi
+tar -C "${basename}" -c -f "${basename}/metadata.tar" metadata || die "tar metadata failed"
+rm -r "${basename}/metadata" || die "rm metadata failed"
+"${comp[@]}" "${basename}/metadata.tar" || die "${comp[*]} metadata.tar failed"
+
+echo "Signing tarballs ..." >&2
+gpg --detach-sign "${basename}/metadata.tar${comp_suffix}" || die "signing metadata failed"
+gpg --detach-sign "${basename}/contents.tar${comp_suffix}" || die "signing contents failed"
+
+echo "Packing the final tarball ..." >&2
+cd - >/dev/null || die "cd back failed"
+tar -c -C "${tmpdir}" -f "${output}" \
+	-V "gpkg: ${basename}" \
+	"${basename}/metadata.tar${comp_suffix}.sig" \
+	"${basename}/metadata.tar${comp_suffix}" \
+	"${basename}/contents.tar${comp_suffix}.sig" \
+	"${basename}/contents.tar${comp_suffix}"
+
+echo "Output written to: ${output}" >&2

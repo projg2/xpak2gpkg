@@ -52,7 +52,7 @@ esac
 
 basename=${filename%.xpak}
 mkdir "${basename}" || die "mkdir failed"
-mv "${data}" "${basename}/contents.tar${comp_suffix}" || die "mv contents failed"
+mv "${data}" "${basename}/image.tar${comp_suffix}" || die "mv image failed"
 
 echo "Repacking metadata ..." >&2
 mkdir "${basename}/metadata" || die "mkdir (2) failed"
@@ -68,7 +68,7 @@ rm -r "${basename}/metadata" || die "rm metadata failed"
 
 echo "Signing tarballs ..." >&2
 gpg --detach-sign "${basename}/metadata.tar${comp_suffix}" || die "signing metadata failed"
-gpg --detach-sign "${basename}/contents.tar${comp_suffix}" || die "signing contents failed"
+gpg --detach-sign "${basename}/image.tar${comp_suffix}" || die "signing image failed"
 
 echo "Packing the final tarball ..." >&2
 cd - >/dev/null || die "cd back failed"
@@ -76,7 +76,7 @@ tar -c -C "${tmpdir}" -f "${output}" \
 	-V "gpkg: ${basename}" \
 	"${basename}/metadata.tar${comp_suffix}.sig" \
 	"${basename}/metadata.tar${comp_suffix}" \
-	"${basename}/contents.tar${comp_suffix}.sig" \
-	"${basename}/contents.tar${comp_suffix}"
+	"${basename}/image.tar${comp_suffix}.sig" \
+	"${basename}/image.tar${comp_suffix}"
 
 echo "Output written to: ${output}" >&2

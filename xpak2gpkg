@@ -52,6 +52,7 @@ esac
 
 basename=${filename%.xpak}
 mkdir "${basename}" || die "mkdir failed"
+touch "${basename}/gpkg-1.txt" || die "touch gpkg-1.txt failed"
 
 echo "Repacking metadata ..." >&2
 mkdir "${basename}/metadata" || die "mkdir metadata failed"
@@ -78,8 +79,8 @@ gpg --detach-sign "${basename}/image.tar${comp_suffix}" || die "signing image fa
 
 echo "Packing the final tarball ..." >&2
 cd - >/dev/null || die "cd back failed"
-tar -c -C "${tmpdir}" -f "${output}" \
-	-V "gpkg: ${basename}" \
+tar --format=gnu -c -b 1 -C "${tmpdir}" -f "${output}" \
+	"${basename}/gpkg-1.txt" \
 	"${basename}/metadata.tar${comp_suffix}.sig" \
 	"${basename}/metadata.tar${comp_suffix}" \
 	"${basename}/image.tar${comp_suffix}.sig" \
